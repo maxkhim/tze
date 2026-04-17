@@ -1,0 +1,848 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Order Management API",
+    "version": "1.0.0",
+    "description": "API для управления заказами интернет-магазина запчастей.\n\n## Ограничения\n- Создание заказов ограничено **10 запросами в минуту с одного IP**.",
+    "contact": {
+      "name": "API Support",
+      "email": "support@example.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080/api/v1",
+      "description": "Локальный сервер разработки (Docker)"
+    }
+  ],
+  "tags": [
+    {
+      "name": "products",
+      "description": "Работа с каталогом товаров"
+    },
+    {
+      "name": "orders",
+      "description": "Управление заказами"
+    }
+  ],
+  "paths": {
+    "/products": {
+      "get": {
+        "tags": [
+          "products"
+        ],
+        "summary": "Получить список товаров",
+        "description": "Возвращает пагинированный список товаров с возможностью фильтрации по категории и поиска по названию/SKU.",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "description": "Фильтр по категории товара",
+            "schema": {
+              "type": "string"
+            },
+            "example": "engine"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Поиск по названию или артикулу (SKU)",
+            "schema": {
+              "type": "string"
+            },
+            "example": "filter"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Номер страницы для пагинации",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный ответ со списком товаров",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Product"
+                      }
+                    },
+                    "links": {
+                      "type": "object",
+                      "properties": {
+                        "first": {
+                          "type": "string"
+                        },
+                        "last": {
+                          "type": "string"
+                        },
+                        "prev": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "next": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "current_page": {
+                          "type": "integer"
+                        },
+                        "from": {
+                          "type": "integer"
+                        },
+                        "last_page": {
+                          "type": "integer"
+                        },
+                        "path": {
+                          "type": "string"
+                        },
+                        "per_page": {
+                          "type": "integer"
+                        },
+                        "to": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": 1,
+                      "name": "Масляный фильтр",
+                      "sku": "FIL-123",
+                      "price": "450.00",
+                      "stock_quantity": 12,
+                      "category": "engine"
+                    },
+                    {
+                      "id": 2,
+                      "name": "Тормозные колодки",
+                      "sku": "BRK-456",
+                      "price": "2100.00",
+                      "stock_quantity": 5,
+                      "category": "brakes"
+                    }
+                  ],
+                  "links": {
+                    "first": "http://localhost:8080/api/v1/products?page=1",
+                    "last": "http://localhost:8080/api/v1/products?page=3",
+                    "prev": null,
+                    "next": "http://localhost:8080/api/v1/products?page=2"
+                  },
+                  "meta": {
+                    "current_page": 1,
+                    "from": 1,
+                    "last_page": 3,
+                    "path": "http://localhost:8080/api/v1/products",
+                    "per_page": 20,
+                    "to": 20,
+                    "total": 50
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ошибка валидации параметров запроса",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders": {
+      "post": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Создать новый заказ",
+        "description": "Создаёт заказ для указанного клиента с переданными позициями. Проверяется наличие товаров на складе, атомарно списывается stock, рассчитывается итоговая сумма.\n**Ограничение: не более 10 запросов в минуту с одного IP.**",
+        "parameters": [
+          {
+            "name": "X-RateLimit-Limit",
+            "in": "header",
+            "description": "Лимит запросов в минуту",
+            "schema": {
+              "type": "integer",
+              "example": 10
+            }
+          },
+          {
+            "name": "X-RateLimit-Remaining",
+            "in": "header",
+            "description": "Оставшееся количество запросов в текущем окне",
+            "schema": {
+              "type": "integer",
+              "example": 9
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOrderRequest"
+              },
+              "examples": {
+                "example1": {
+                  "summary": "Пример заказа",
+                  "value": {
+                    "customer_id": 1,
+                    "items": [
+                      {
+                        "product_id": 5,
+                        "quantity": 2
+                      },
+                      {
+                        "product_id": 12,
+                        "quantity": 1
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Заказ успешно создан",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Order"
+                    }
+                  }
+                },
+                "example": {
+                  "data": {
+                    "id": 101,
+                    "customer": {
+                      "id": 1,
+                      "name": "Иван Петров",
+                      "email": "ivan@example.com"
+                    },
+                    "status": "new",
+                    "total_amount": "3000.00",
+                    "items": [
+                      {
+                        "id": 301,
+                        "product_id": 5,
+                        "product_name": "Масляный фильтр",
+                        "quantity": 2,
+                        "unit_price": "450.00",
+                        "total_price": "900.00"
+                      },
+                      {
+                        "id": 302,
+                        "product_id": 12,
+                        "product_name": "Тормозная жидкость",
+                        "quantity": 1,
+                        "unit_price": "2100.00",
+                        "total_price": "2100.00"
+                      }
+                    ],
+                    "confirmed_at": null,
+                    "shipped_at": null,
+                    "created_at": "2025-01-15T10:30:00Z"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ошибка валидации данных заказа",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "message": "The given data was invalid.",
+                  "errors": {
+                    "customer_id": [
+                      "The customer id field is required."
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Слишком много запросов (превышен лимит создания заказов)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "message": "Too Many Attempts."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Внутренняя ошибка сервера (например, недостаточно товара на складе)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "message": "Недостаточно товара 'Масляный фильтр' на складе"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Получить список заказов",
+        "description": "Возвращает пагинированный список заказов с возможностью фильтрации по статусу, клиенту и диапазону дат.",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Фильтр по статусу заказа",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "new",
+                "confirmed",
+                "processing",
+                "shipped",
+                "completed",
+                "cancelled"
+              ]
+            },
+            "example": "confirmed"
+          },
+          {
+            "name": "customer_id",
+            "in": "query",
+            "description": "Фильтр по ID клиента",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 1
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Начальная дата создания заказа (включительно)",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "example": "2025-01-01"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Конечная дата создания заказа (включительно)",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "example": "2025-01-31"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Номер страницы",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный ответ со списком заказов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Order"
+                      }
+                    },
+                    "links": {
+                      "type": "object"
+                    },
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": 101,
+                      "customer": {
+                        "id": 1,
+                        "name": "Иван Петров",
+                        "email": "ivan@example.com"
+                      },
+                      "status": "new",
+                      "total_amount": "3000.00",
+                      "items": [
+                        {
+                          "id": 301,
+                          "product_id": 5,
+                          "product_name": "Масляный фильтр",
+                          "quantity": 2,
+                          "unit_price": "450.00",
+                          "total_price": "900.00"
+                        }
+                      ],
+                      "confirmed_at": null,
+                      "shipped_at": null,
+                      "created_at": "2025-01-15T10:30:00Z"
+                    }
+                  ],
+                  "links": {
+                    "first": "http://localhost:8080/api/v1/orders?page=1",
+                    "last": "http://localhost:8080/api/v1/orders?page=5",
+                    "prev": null,
+                    "next": "http://localhost:8080/api/v1/orders?page=2"
+                  },
+                  "meta": {
+                    "current_page": 1,
+                    "from": 1,
+                    "last_page": 5,
+                    "path": "http://localhost:8080/api/v1/orders",
+                    "per_page": 20,
+                    "to": 20,
+                    "total": 98
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ошибка валидации параметров запроса",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{id}": {
+      "get": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Получить детали заказа",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "ID заказа",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 101
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный ответ с деталями заказа",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Order"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Заказ не найден",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "message": "No query results for model [Order] 101"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{id}/status": {
+      "patch": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Изменить статус заказа",
+        "description": "Обновляет статус заказа с проверкой допустимых переходов согласно бизнес-логике.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "ID заказа",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 101
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "confirmed",
+                      "processing",
+                      "shipped",
+                      "completed",
+                      "cancelled"
+                    ],
+                    "description": "Новый статус заказа"
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              },
+              "examples": {
+                "confirm": {
+                  "summary": "Подтверждение заказа",
+                  "value": {
+                    "status": "confirmed"
+                  }
+                },
+                "cancel": {
+                  "summary": "Отмена заказа",
+                  "value": {
+                    "status": "cancelled"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Статус успешно обновлён",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Order"
+                    }
+                  }
+                },
+                "example": {
+                  "data": {
+                    "id": 101,
+                    "customer": {
+                      "id": 1,
+                      "name": "Иван Петров",
+                      "email": "ivan@example.com"
+                    },
+                    "status": "confirmed",
+                    "total_amount": "3000.00",
+                    "items": [],
+                    "confirmed_at": "2025-01-15T11:20:00Z",
+                    "shipped_at": null,
+                    "created_at": "2025-01-15T10:30:00Z"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Недопустимый переход статуса",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "message": "Недопустимый переход статуса с 'shipped' на 'cancelled'"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Заказ не найден",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ошибка валидации (например, отсутствует поле status)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Product": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "example": "Масляный фильтр"
+          },
+          "sku": {
+            "type": "string",
+            "example": "FIL-123"
+          },
+          "price": {
+            "type": "string",
+            "format": "decimal",
+            "example": "450.00"
+          },
+          "stock_quantity": {
+            "type": "integer",
+            "example": 12
+          },
+          "category": {
+            "type": "string",
+            "example": "engine"
+          }
+        }
+      },
+      "OrderItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 301
+          },
+          "product_id": {
+            "type": "integer",
+            "example": 5
+          },
+          "product_name": {
+            "type": "string",
+            "example": "Масляный фильтр"
+          },
+          "quantity": {
+            "type": "integer",
+            "example": 2
+          },
+          "unit_price": {
+            "type": "string",
+            "format": "decimal",
+            "example": "450.00"
+          },
+          "total_price": {
+            "type": "string",
+            "format": "decimal",
+            "example": "900.00"
+          }
+        }
+      },
+      "CustomerBrief": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "example": "Иван Петров"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "ivan@example.com"
+          }
+        }
+      },
+      "Order": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 101
+          },
+          "customer": {
+            "$ref": "#/components/schemas/CustomerBrief"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "new",
+              "confirmed",
+              "processing",
+              "shipped",
+              "completed",
+              "cancelled"
+            ],
+            "example": "new"
+          },
+          "total_amount": {
+            "type": "string",
+            "format": "decimal",
+            "example": "3000.00"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderItem"
+            }
+          },
+          "confirmed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": null
+          },
+          "shipped_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": null
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2025-01-15T10:30:00Z"
+          }
+        }
+      },
+      "CreateOrderRequest": {
+        "type": "object",
+        "required": [
+          "customer_id",
+          "items"
+        ],
+        "properties": {
+          "customer_id": {
+            "type": "integer",
+            "description": "ID существующего клиента",
+            "example": 1
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "product_id",
+                "quantity"
+              ],
+              "properties": {
+                "product_id": {
+                  "type": "integer",
+                  "description": "ID товара",
+                  "example": 5
+                },
+                "quantity": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Количество единиц товара",
+                  "example": 2
+                }
+              }
+            }
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Сообщение об ошибке"
+          },
+          "errors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "Детали ошибок валидации (при наличии)"
+          }
+        },
+        "example": {
+          "message": "The given data was invalid.",
+          "errors": {
+            "email": [
+              "The email field is required."
+            ]
+          }
+        }
+      }
+    }
+  }
+}
