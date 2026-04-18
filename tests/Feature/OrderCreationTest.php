@@ -9,9 +9,27 @@ use Illuminate\Support\Facades\Http;
 
 class OrderCreationTest extends TestCase
 {
+
+    public static function setUpBeforeClass(): void
+    {
+        parent::setUpBeforeClass();
+        $envPath = __DIR__ . '/../../.env';
+        if (!file_exists($envPath)) {
+            touch($envPath);
+        }
+    }
+
+    public static function tearDownAfterClass(): void
+    {
+        parent::tearDownAfterClass();
+        $envPath = __DIR__ . '/../../.env';
+        if (file_exists($envPath)) {
+            unlink($envPath);
+        }
+    }
+
     public function test_successful_order_creation(): void
     {
-        //Http::fake();
 
         $customer = Customer::factory()->create();
         $product = Product::factory()->create([

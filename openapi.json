@@ -11,7 +11,7 @@
   },
   "servers": [
     {
-      "url": "http://localhost:8080/api/v1",
+      "url": "http://localhost:8088/api/v1",
       "description": "Локальный сервер разработки (Docker)"
     }
   ],
@@ -143,16 +143,16 @@
                     }
                   ],
                   "links": {
-                    "first": "http://localhost:8080/api/v1/products?page=1",
-                    "last": "http://localhost:8080/api/v1/products?page=3",
+                    "first": "http://localhost:8088/api/v1/products?page=1",
+                    "last": "http://localhost:8088/api/v1/products?page=3",
                     "prev": null,
-                    "next": "http://localhost:8080/api/v1/products?page=2"
+                    "next": "http://localhost:8088/api/v1/products?page=2"
                   },
                   "meta": {
                     "current_page": 1,
                     "from": 1,
                     "last_page": 3,
-                    "path": "http://localhost:8080/api/v1/products",
+                    "path": "http://localhost:8088/api/v1/products",
                     "per_page": 20,
                     "to": 20,
                     "total": 50
@@ -436,16 +436,16 @@
                     }
                   ],
                   "links": {
-                    "first": "http://localhost:8080/api/v1/orders?page=1",
-                    "last": "http://localhost:8080/api/v1/orders?page=5",
+                    "first": "http://localhost:8088/api/v1/orders?page=1",
+                    "last": "http://localhost:8088/api/v1/orders?page=5",
                     "prev": null,
-                    "next": "http://localhost:8080/api/v1/orders?page=2"
+                    "next": "http://localhost:8088/api/v1/orders?page=2"
                   },
                   "meta": {
                     "current_page": 1,
                     "from": 1,
                     "last_page": 5,
-                    "path": "http://localhost:8080/api/v1/orders",
+                    "path": "http://localhost:8088/api/v1/orders",
                     "per_page": 20,
                     "to": 20,
                     "total": 98
